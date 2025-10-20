@@ -1,2 +1,9 @@
 fastapi[standard]
 uvicorn
+pymongo==4.14.1
+openai
+langchain==0.3.26
+langchain_core==0.3.67
+langgraph==0.5.0
+langsmith==0.4.4
+dotenv
