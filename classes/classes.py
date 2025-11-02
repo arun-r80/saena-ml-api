@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from enum import Enum
 from langgraph.graph.message import add_messages
 
-class ResponseRequestBody(BaseModel):
+class ChatRequestBodyModel(BaseModel):
     previous_conversation_id: str | None = None 
     # The id which is given to llm OpenAI model, for the model to understand previous context messages
     # In short, this id links the conversation for LLM's memory. 
@@ -13,6 +13,24 @@ class ResponseRequestBody(BaseModel):
     # In short, this id corresponds to chatbot's memory.
     message: str | None = None
     # Message typed by the user. 
+
+class ChatResponseBodyModel(BaseModel):
+   messages: str
+   connection_status: bool
+   db_name: str
+   header_user_name: str
+   header_appcorrid: str
+
+class ChatHeaderModel(BaseModel):
+    """
+    Object providing header values for requests to chat model
+    x_Appcorrelationid: GUID value representing each unique request from Front end
+    user_name: Abstraction representing user name resolved by Cloud Provider(Azure) based
+        based on authentication
+    """
+    x_appcorrelationid: str | None
+    user_name: str | None
+
 
 class JiraArtifactType(Enum):
     Defect = "Epic"
@@ -46,5 +64,8 @@ class ThreadConfig(BaseModel):
   thread_id: str
   checkpoint_id: str = None
   recursion_limit: int = 100
+
+
+
 
 

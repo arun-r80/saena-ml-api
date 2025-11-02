@@ -1,16 +1,28 @@
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, HTTPException
 from contextlib import asynccontextmanager
 from database import db
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import logging
 from typing import Annotated
+from classes.classes import ChatHeaderModel, ChatRequestBodyModel, ChatResponseBodyModel
 
 
 db_collection = None
 db_client = None
 openai = None
 DB_NAME = None
+
+# Create Logger
+logging.basicConfig(
+   format="%(asctime)s %(levelname)s %(name)s - %(message)s - %(appcorrid)s %(object)s",
+   level=logging.INFO, 
+   handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+logger.info("Logger Initialized")
+
 
 #Create lifespan event
 @asynccontextmanager
@@ -24,15 +36,15 @@ async def lifespan(app: FastAPI):
     OPENAI_API_KEY=os.environ["OPENAI_API_KEY"]
 
     client = await db.get_db_client(uri=db_uri)
-    print("DB Client created.")
+    logger.info("DB Client created.", extra=dict(appcorrid=None, object=None))
     database=client[DB_NAME]
-    print("DB Object created: ", DB_NAME)
+    logger.info("DB Object created: "+ DB_NAME, extra=dict(appcorrid=None, object=None))
     collection=database[COLLECTION_NAME]
-    print("DB Collection object created: ", COLLECTION_NAME)
+    logger.info("DB Collection object created: " + COLLECTION_NAME, extra=dict(appcorrid=None, object=None))
     openai = OpenAI(api_key=OPENAI_API_KEY)
-    print("Open AI Client created")
+    logger.info("Open AI Client created", extra=dict(appcorrid=None, object=None))
    except Exception as e: 
-      print("Error occured while creating database", e)
+      logger.error("Error occured while creating database" + str(e), extra=dict(appcorrid=None, object=None))
       raise e
    yield
    client.close()
@@ -42,26 +54,33 @@ app=FastAPI(lifespan=lifespan)
 
 from pydantic import BaseModel
 
-class ResponseDummy(BaseModel):
-   messages: str
-   connection_status: bool
-   db_name: str
-   header_name: str
 
-@app.get("/")
-async def root(user_name: Annotated[str | None, Header()] = None)-> ResponseDummy:
-    global client, DB_NAME, db_collection
-    connection_status = False
-    
 
-    response = ResponseDummy(
-      messages="Hello, World!", 
+@app.get("/", status_code=201)
+async def root(headers: Annotated[ChatHeaderModel, Header()] = None, request:ChatRequestBodyModel = None)-> ChatResponseBodyModel:
+   global client, DB_NAME, db_collection
+   connection_status = False
+   
+   logger.info("Received Request ", extra=dict(appcorrid= headers.x_appcorrelationid, object=request.model_dump(mode='python')))
+
+   try: 
+      response = ChatResponseBodyModel(
+      messages=request.message + " Is the response", 
       connection_status= connection_status, 
       db_name=DB_NAME, 
-      header_name= user_name
-   )
+      header_user_name= headers.user_name,
+      header_appcorrid = headers.x_appcorrelationid
+   )  
+      
+      return response
+   except Exception as e: 
+      logger.error("Error creating response: ",  
+                   stack_info=True,
+                   exc_info=True, 
+                   extra=dict(appcorrid= headers.x_appcorrelationid, object=request.model_dump(mode='python')))
+      raise HTTPException(status_code=422, detail=str(e))
+  
    
-    return response
 
 @app.post("/getchatresponse")
 async def get_char_response(): 
