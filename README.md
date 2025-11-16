@@ -1,5 +1,7 @@
 # Saena ML API - Backend Framework implementing Graph
 
+Wrapper on graph object. Invoking of API endpoint represents one complete execution of the graph with user message as input
+
 ## State Schema 
 The defined state schema is critical and unique for an implementation pathway of a graph. State Schema for this graph contains the following key attributes: \
 class StateSchema(TypedDict): \
