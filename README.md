@@ -7,13 +7,7 @@ The defined state schema is critical and unique for an implementation pathway of
 class StateSchema(TypedDict): \
     attribute_state: AccountAttributesSchema \
     - Schema object representing short term memory between individual message turns ( ie., between different graph implementations). 
-    Stored in MongoDB instance,and it indexed by a session id
-    session_id: str \
-    - UUID representing one conversation thread with the user \
-    app_correlation_id: str \
-    - App Correlation ID - Corresponds to one specific turn or message provided by the user \
-    user: str \
-    - Name of the sure as identified by IdP, specifically transferred in header request to App Service \
+    Stored in MongoDB instance,and it indexed by a session id.\
     messages: Annotated[list, add] \
     - Context and User messages for one  execution of graph \
     previous_conversation_id: str \
@@ -24,3 +18,25 @@ class StateSchema(TypedDict): \
     As the graph passes through individual nodes, LLMs are called as intermediate step, and each LLM invoking returns conversation id that is stored in the state. \
     response: list \
     - Stores response object returned by LLM to be used by conditional edges predominantly, in subsequent steps. \
+
+## class GraphRunMetaSchema(BaseModel):
+    """
+    Contains Schema for metadata, which provides config values for runnable config and other user meta data. 
+    """
+    session_id: str
+    # UUID representing one conversation thread with the user
+    app_correlation_id: str
+    # App Correlation ID - Corresponds to one specific turn or message provided by the user
+    user: str
+    # Name of the sure as identified by IdP, specifically transferred in header request to App Service
+
+##  class ThreadConfig(BaseModel): \
+  """ \
+  Contains RunnableConfig details for each invocation/run of the graph \
+  """ \
+  thread_id: str \
+  - The thread id will be the session id, which is nothing but conversation id with a user
+  checkpoint_id: str = None \
+  - UUID representing a checkpoint identifier, for time-travel and other use cases
+  recursion_limit: int = 100 \
+  
