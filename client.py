@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from database import db
 from openai import OpenAI
 from dotenv import load_dotenv
-import os
+import os, sys
 import logging
 from typing import Annotated
 from classes.classes import ChatHeaderModel, ChatRequestBodyModel, ChatResponseBodyModel
@@ -13,38 +13,41 @@ db_collection = None
 db_client = None
 openai = None
 DB_NAME = None
+logger = None
 
-# Create Logger
-logging.basicConfig(
-   format="%(asctime)s %(levelname)s %(name)s - %(message)s - %(appcorrid)s %(object)s",
-   level=logging.INFO, 
-   handlers=[logging.StreamHandler()]
-)
-logger = logging.getLogger(__name__)
-logger.info("Logger Initialized")
 
 
 #Create lifespan event
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-   global db_collection,  client, openai, DB_NAME
+   global db_collection,  client, openai, DB_NAME, logger
+
+   # Create Logger
+   logging.basicConfig(
+      format="%(asctime)s %(levelname)s %(name)s - %(message)s - App Correlation Id: %(appcorrid)s Conversation Id:%(conversationid)s  %(object)s",
+      level=logging.INFO, 
+      handlers=[logging.StreamHandler()]
+)
+   logger = logging.getLogger(__name__)
+   logger.info("Logger Initialized",extra=dict(appcorrid=None, object=None, sessionid=None ) )
+
    try: 
     load_dotenv()
     db_uri= os.environ["DB_CONNECTION_STRING"]
     DB_NAME= os.environ["DB_NAME"]
     COLLECTION_NAME= os.environ["COLLECTION_NAME"]
-    OPENAI_API_KEY=os.environ["OPENAI_API_KEY"]
+    
+    
 
     client = await db.get_db_client(uri=db_uri)
-    logger.info("DB Client created.", extra=dict(appcorrid=None, object=None))
+    logger.info("DB Client created.", extra=dict(appcorrid=None, object=None,sessionid=None))
     database=client[DB_NAME]
-    logger.info("DB Object created: "+ DB_NAME, extra=dict(appcorrid=None, object=None))
+    logger.info("DB Object created: "+ DB_NAME, extra=dict(appcorrid=None, object=None,sessionid=None))
     collection=database[COLLECTION_NAME]
-    logger.info("DB Collection object created: " + COLLECTION_NAME, extra=dict(appcorrid=None, object=None))
-    openai = OpenAI(api_key=OPENAI_API_KEY)
-    logger.info("Open AI Client created", extra=dict(appcorrid=None, object=None))
+    logger.info("DB Collection object created: " + COLLECTION_NAME, extra=dict(appcorrid=None, object=None,sessionid=None))
+    
    except Exception as e: 
-      logger.error("Error occured while creating database" + str(e), extra=dict(appcorrid=None, object=None))
+      logger.error("Error occured while creating database" + str(e), extra=dict(appcorrid=None, object=None,sessionid=None))
       raise e
    yield
    client.close()
