@@ -4,6 +4,7 @@ from enum import Enum
 from langgraph.graph.message import add_messages, AnyMessage
 from langgraph.graph import StateGraph
 from operator import add
+from openai.types.responses import Response
 
 class ChatRequestBodyModel(BaseModel):
     previous_conversation_id: str | None = None 
@@ -54,7 +55,7 @@ class StateSchema(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     previous_conversation_id: str
     current_conversation_id: str
-    response: list
+    response: Response
 
 class AppConfig:
   MODEL: str = "gpt-4o-mini"

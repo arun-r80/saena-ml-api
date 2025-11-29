@@ -23,6 +23,7 @@ from langgraph.typing import InputT
 from langchain_core.runnables import RunnableConfig
 from logging import Logger
 from database.db import get_async_db_client
+from openai.types.responses import Response
 
 
 
@@ -92,8 +93,16 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         except KeyError as ke: 
             pass
         return {"current_conversation_id":response.id,
-                "response": response.output
+                "response": response
                 }
+    def _02_branch_for_usecase(self, state: StateSchema ) -> str: 
+        """
+        Conditional edge that routes graph flow to appropriate use case, or to failure scenario
+        """
+        # for output in  state.response["output"]: 
+        #     if 
+
+
     
     def compile(self) -> bool:
         """
