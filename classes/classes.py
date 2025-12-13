@@ -5,6 +5,7 @@ from langgraph.graph.message import add_messages, AnyMessage
 from langgraph.graph import StateGraph
 from operator import add
 from openai.types.responses import Response
+from fastapi import status
 
 class ChatRequestBodyModel(BaseModel):
     previous_conversation_id: str | None = None 
@@ -36,25 +37,24 @@ class ChatHeaderModel(BaseModel):
 
 
 class AccountArtifactType(Enum):
-    Defect = "Epic"
-    Task = "Subtask"
-    SubTask = "Subtask"
-    Story = "Story"
-    Feature = "Feature"
-    Request = "Request"
-    Bug = "Bug"
+    credit = "credit_card"
+    savings = "savings"
+    checking = "checking"
 
 class AccountAttributesSchema(BaseModel):
-    issue_type: AccountArtifactType
-    story_point: int
-    summary: str
-    description: str
+    account_type: AccountArtifactType
+    account_holder_name: str
+    account_limit: int
+    address: str
+    
 
 class StateSchema(TypedDict):
     attribute_state: AccountAttributesSchema
     messages: Annotated[list[AnyMessage], add_messages]
     previous_conversation_id: str
     current_conversation_id: str
+    usecase_conditional_status: str
+    api_response_status_code: int
     response: Response
 
 class AppConfig:
