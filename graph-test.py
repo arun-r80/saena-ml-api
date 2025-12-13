@@ -43,7 +43,12 @@ load_dotenv
 async def get_response():
     graph_wrapper = GraphFlowWrapper(log=LogWrapper())
     graph_wrapper.compile()
-    state = StateSchema(attribute_state=None, messages=[HumanMessage("I want to open an account")], previous_conversation_id=None, current_conversation_id=None, responses=[])
+    state = StateSchema(attribute_state=None, 
+                        messages=[HumanMessage("I want to open an account")], 
+                        previous_conversation_id=None, 
+                        current_conversation_id=None, 
+                        response_code_code=200,
+                        responses=[])
     config = GraphRunMetaSchema(conversation_id="arun-21Nov-01", app_correlation_id="arun_1234", user="arun")
     response = await graph_wrapper.invoke(state,config )
    

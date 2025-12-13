@@ -9,7 +9,7 @@ _01_t_orcgraph_identify_create_usecase = {
     intent expressed  by the user in current and previous messages
     """,
     "strict": True,
-      "parameters": {
+    "parameters": {
         "type": "object", 
         "properties": {},
         "additionalProperties": False}

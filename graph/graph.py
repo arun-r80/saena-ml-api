@@ -15,15 +15,17 @@ from classes.classes import BaseGraph, AccountAttributesSchema, StateSchema,AppC
 from classes.utilities import LogWrapper
 from pymongo.collection import Collection
 from openai import OpenAI, Client
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, AnyMessage
 from langgraph.graph.state import CompiledStateGraph
-from graph.messages import context_orcgraph_01_identifycreateuse
+from graph.messages import context_orcgraph_01_identifycreateuse,context_03a_node_validate_attributelist_
 from graph.tools import _01_t_orcgraph_identify_create_usecase, _01_t_orcgraph_identify_otherscenarios_usecase
 from langgraph.typing import InputT
 from langchain_core.runnables import RunnableConfig
 from logging import Logger
 from database.db import get_async_db_client
 from openai.types.responses import Response
+from fastapi import status
+from pydantic import ValidationError
 
 
 
@@ -56,7 +58,6 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         
         # Initialize Asynchronous connectino options
         try: 
-            
             self.mongo_async_client = get_async_db_client(db_uri, self.log.logger)
             self.db = AsyncDatabase(self.mongo_async_client, DB_NAME)
             self.db_collection = AsyncCollection(self.db, COLLECTION_NAME)
@@ -88,6 +89,7 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
                 input=input_list, 
                 user=config["metadata"]["user"],
                 previous_response_id=s["previous_conversation_id"],
+                
                 tools=[_01_t_orcgraph_identify_create_usecase, _01_t_orcgraph_identify_otherscenarios_usecase ]
             )
         except KeyError as ke: 
@@ -95,13 +97,98 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         return {"current_conversation_id":response.id,
                 "response": response
                 }
-    def _02_branch_for_usecase(self, state: StateSchema ) -> str: 
+    async def _02_node_branch_for_usecase(self, state: StateSchema ) -> str: 
         """
         Conditional edge that routes graph flow to appropriate use case, or to failure scenario
         """
-        # for output in  state.response["output"]: 
-        #     if 
+        #Check for refusal in message
+        for output in  state.response["output"]: 
+            if output.type == "message":
+                for c in output.content: 
+                    if c.type == 'refusal': 
+                        return({
+                            "messages":SystemMessage("The was refusal to get your response:  "  + c.refusal),
+                            "api_response_status_code": status.HTTP_409_CONFLICT,
+                            "conditional_status":"Refusal"})
+                    if c.type == "output_text":
+                        return({
+                            "messages":SystemMessage(c.text),
+                            "api_response_status_code": status.HTTP_203_NON_AUTHORITATIVE_INFORMATION,
+                            "conditional_status":"Other Message"})
+                        
+            if output.type == "function_call":
+                for c in output.content: 
+                    return {"conditional_status":c.name}
+                
 
+    async def _03b_node_other_usecase_(self, state:StateSchema)-> StateSchema:
+        """"
+        This node is to provide an output that the use case is different from creating an account. 
+        """            
+        return(SystemMessage(
+            "I can provide with support to create a new account for you. "
+        ))
+
+    async def _03a_node_validate_attributelist_(self, state: StateSchema)-> StateSchema:
+        """
+        NOde to provide validation information between current attribute values and attribute schema, which will 
+        be injected to conversation context to evoke right user response from the model.
+        """
+        current_attribute_values = state.attribute_state
+        try: 
+            AccountAttributesSchema.model_validate(current_attribute_values)
+        except ValidationError as ve:
+            return({"messages":SystemMessage(context_03a_node_validate_attributelist_ + str(ve)),
+                    "usecase_conditional_status":"validation_error"}
+                    )
+        return({"usecase_conditional_status":"create_attribute_success"})
+            
+    async def _04a_node_validation_failure_response_(self, state:StateSchema)-> StateSchema:
+        """
+        Return a message to user that there are validation error messages in creation of an account
+        """
+        llm_response = await self.call_openai_llm(
+                {
+                    "role":"developer", 
+                    "content":state.messages[-1].content
+                },
+                state
+
+        )
+        llm_response_text:str = ""
+        for output in llm_response.output:
+            if output.type == "message":
+                llm_response_text = output.content 
+                break
+
+        return ({
+            "current_conversation_id":llm_response.id,
+            "messages":AIMessage(llm_response_text)
+
+        })
+
+    async def call_openai_llm(self,message: AnyMessage, state: StateSchema)-> Response:
+        """
+        Utility function to make calls to LLM, which reduces need for additional nodes and keeps overall graph flow simpler to comprehend
+        """
+        return self.client.responses.create(
+            previous_response_id=state["current_conversation_id"], 
+            model=AppConfig.MODEL,
+            input=[message]
+        )
+
+    
+    def _04b_node_create_attribute_success(state:StateSchema)->StateSchema:
+        """
+        Node to provide success message for creation of a savings bank account to the user
+        """
+        successful_creation_message = f"""
+            Bank Account created successfully with following attributes: 
+            {"\n".join([f"{d}:{state.attribute_state[d]}" for d in state.attribute_state])}
+            """
+        return{
+            "messages":AIMessage(successful_creation_message)
+        }
 
     
     def compile(self) -> bool:
@@ -116,9 +203,23 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
             graph_builder.add_node("01a_add_usecase_context",self._01a_node_add_identfyusecase_sysprompt )
             graph_builder.add_node("_01_process_usecase_identification", self._01_node_identify_usecase)
             graph_builder.add_node("_update_short_term_memory", self._postprocess_update_short_term_memory_for_conversation)
+            graph_builder.add_node("_02_branch_for_usecase", self._02_node_branch_for_usecase)
+            graph_builder.add_node("_03b_node_other_usecase_", self._03b_node_other_usecase_)
             graph_builder.add_edge(START, "_get_short_term_memory")
             graph_builder.add_edge("_get_short_term_memory", "01a_add_usecase_context")
             graph_builder.add_edge("01a_add_usecase_context","_01_process_usecase_identification" )
+            graph_builder.add_edge("_03a_node_validate_attributelist_", self._03a_node_validate_attributelist_)
+            graph_builder.add_node("_04a_node_validation_failure_response_", self._04a_node_validation_failure_response_)
+            graph_builder.add_node("_04b_node_create_attribute_success", self._04b_node_create_attribute_success)
+            graph_builder.add_conditional_edges("_02_branch_for_usecase", 
+                                                lambda state:state["usecase_conditional_status"],
+                                                {
+                                                    "Refusal": END,
+                                                    "Other Message": END,
+                                                    "_01_t_orcgraph_identify_create_usecase":"_03a_node_validate_attributelist_",
+                                                    "_01_t_orcgraph_identify_otherscenarios_usecase":"_03b_node_other_usecase_"
+                                                }
+                                                )
             graph_builder.add_edge("_01_process_usecase_identification" ,"_update_short_term_memory" )
             graph_builder.add_edge("_update_short_term_memory", END)
 

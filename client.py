@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 from contextlib import asynccontextmanager
 from database import db
 from openai import OpenAI
@@ -60,7 +60,7 @@ from pydantic import BaseModel
 
 
 @app.get("/", status_code=201)
-async def root(headers: Annotated[ChatHeaderModel, Header()] = None, request:ChatRequestBodyModel = None)-> ChatResponseBodyModel:
+async def root(api_response: Response, headers: Annotated[ChatHeaderModel, Header()] = None, request:ChatRequestBodyModel = None)-> ChatResponseBodyModel:
    global client, DB_NAME, db_collection
    connection_status = False
    
@@ -72,7 +72,8 @@ async def root(headers: Annotated[ChatHeaderModel, Header()] = None, request:Cha
       connection_status= connection_status, 
       db_name=DB_NAME, 
       header_user_name= headers.user_name,
-      header_appcorrid = headers.x_appcorrelationid
+      header_appcorrid = headers.x_appcorrelationid,
+      
    )  
       
       return response
@@ -86,7 +87,7 @@ async def root(headers: Annotated[ChatHeaderModel, Header()] = None, request:Cha
    
 
 @app.post("/getchatresponse")
-async def get_char_response(): 
+async def get_char_response(api_response:Response): 
    return
 
 # Create an end point to take request from front end
