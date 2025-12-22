@@ -17,13 +17,18 @@ class ChatRequestBodyModel(BaseModel):
     # In short, this id corresponds to chatbot's memory.
     message: str | None = None
     # Message typed by the user. 
+    user_name: str | None = "test"
+    # User name interacting with the model
 
 class ChatResponseBodyModel(BaseModel):
-   messages: str
-   connection_status: bool
-   db_name: str
-   header_user_name: str
+   messages: str 
+   # Message response by the model
+   model_response_id: str
+   # UUID that represent the id parameter in Responses object retruned by OpenAI Responses Create API call. 
+   # This id is needed to preserve previous conversation context, without need to store all conversations. 
+   
    header_appcorrid: str
+   # UUID that represent this run(or invoking of model by user with a message)
 
 class ChatHeaderModel(BaseModel):
     """
@@ -36,20 +41,25 @@ class ChatHeaderModel(BaseModel):
     user_name: str | None
 
 
-class AccountArtifactType(Enum):
-    credit = "credit_card"
+class SavingsAccountType(Enum):  # AccountArtifactType
+    everyday = "every day savings"
     savings = "savings"
     checking = "checking"
 
-class AccountAttributesSchema(BaseModel):
-    account_type: AccountArtifactType
+class UseCaseNames(Enum):
+   ":: Schema for supported use cased by the chatbot. Update the Schema for onboarding new usecase::"
+   create_savings_account = "create savings account"
+   other_usecase = "other use case"
+
+class SavingsAccountAttributesSchema(BaseModel):
+    account_type: SavingsAccountType
     account_holder_name: str
     account_limit: int
     address: str
     
 
 class StateSchema(TypedDict):
-    attribute_state: AccountAttributesSchema
+    attribute_state: dict
     messages: Annotated[list[AnyMessage], add_messages]
     previous_conversation_id: str
     current_conversation_id: str
@@ -101,10 +111,16 @@ class BaseGraph[state: StateSchema ]:
       return updates
    
 # Role mapping dict, with values as open ai role types and keys as LangChain message types
-role_mapping = {
+role_mapping:dict = {
    "system":"developer", 
    "human": "user" ,
-   "ai": "assistant"
+   "ai": "assistant", 
+   "tool":"tool"
+}
+
+_02_tool_content_mapping_ = {
+   "_01_t_orcgraph_identify_create_savings_account_usecase": "The use case selected by user is create bank account",
+   "_01_t_orcgraph_identify_otherscenarios_usecase": "The user has selected a different use case or has provided a different message"
 }
 
 # Type Variables

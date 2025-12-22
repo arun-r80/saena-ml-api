@@ -5,7 +5,7 @@ from pymongo.asynchronous.mongo_client import AsyncMongoClient
 from pydantic import BaseModel
 import asyncio
 from logging import Logger
-from classes.utilities import LogWrapper
+from utilities.utilities import LogWrapper
 
 # define function to create mongodb connection
 def get_db_client(uri: str = None,retries: int = 3, delay: float = 1.0):

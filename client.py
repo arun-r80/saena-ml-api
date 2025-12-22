@@ -59,7 +59,7 @@ from pydantic import BaseModel
 
 
 
-@app.get("/", status_code=201)
+@app.get("/formassist", status_code=201)
 async def root(api_response: Response, headers: Annotated[ChatHeaderModel, Header()] = None, request:ChatRequestBodyModel = None)-> ChatResponseBodyModel:
    global client, DB_NAME, db_collection
    connection_status = False
