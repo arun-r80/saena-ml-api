@@ -1,10 +1,11 @@
 """
 define tools for graph node outputs
 """
+from typing import Dict
 
-_01_t_orcgraph_identify_create_usecase = {
+_01_t_orcgraph_identify_create_savings_account_usecase = {
     "type": "function", 
-    "name": "_01_t_orcgraph_identify_create_usecase", 
+    "name": "_01_t_orcgraph_identify_create_savings_account_usecase", 
     "description": """Tool to be called if the user wants to create an account, as ascertained by 
     intent expressed  by the user in current and previous messages
     """,
@@ -28,4 +29,10 @@ _01_t_orcgraph_identify_otherscenarios_usecase = {
         "type": "object", 
         "properties": {},
         "additionalProperties": False}
+}
+
+tool_mapping:Dict = {
+    "_01_t_orcgraph_identify_create_savings_account_usecase":_01_t_orcgraph_identify_create_savings_account_usecase, 
+    "_01_t_orcgraph_identify_otherscenarios_usecase":_01_t_orcgraph_identify_otherscenarios_usecase
+
 }
