@@ -1,5 +1,5 @@
 from typing import TypedDict, Annotated, TypeVar
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 from langgraph.graph.message import add_messages, AnyMessage
 from langgraph.graph import StateGraph
@@ -7,10 +7,14 @@ from operator import add
 from openai.types.responses import Response
 from fastapi import status
 
+class ApiCheckRequestBodyModel(BaseModel):
+   message: str
+
 class ChatRequestBodyModel(BaseModel):
-    previous_conversation_id: str | None = None 
+    previous_response_id: str | None = None 
     # The id which is given to llm OpenAI model, for the model to understand previous context messages
-    # In short, this id links the conversation for LLM's memory. 
+    # In short, this id links the conversation for LLM's memory. If populated, this id will correspond to 
+    # id attribute of Responses object, returned by model during last invocation in graph execution. 
     conversation_id: str | None = None
     # Id to identify a "logical" conversation - ie., a session in which the short term memory (i.e, the state)
     # gets updated. this session id is used to retrieve the short term memory object from database. 
@@ -19,6 +23,10 @@ class ChatRequestBodyModel(BaseModel):
     # Message typed by the user. 
     user_name: str | None = "test"
     # User name interacting with the model
+    app_correlation_id: str | None = None
+    # Unique identifier for each invocation of graph from front-end application or any other consumer. 
+
+
 
 class ChatResponseBodyModel(BaseModel):
    messages: str 
@@ -26,7 +34,6 @@ class ChatResponseBodyModel(BaseModel):
    model_response_id: str
    # UUID that represent the id parameter in Responses object retruned by OpenAI Responses Create API call. 
    # This id is needed to preserve previous conversation context, without need to store all conversations. 
-   
    header_appcorrid: str
    # UUID that represent this run(or invoking of model by user with a message)
 
@@ -37,8 +44,10 @@ class ChatHeaderModel(BaseModel):
     user_name: Abstraction representing user name resolved by Cloud Provider(Azure) based
         based on authentication
     """
-    x_appcorrelationid: str | None
-    user_name: str | None
+    user_name: str | None = "test"
+    # User name interacting with the model
+    app_correlation_id: str | None = None
+    # Unique identifier for each invocation of graph from front-end application or any other consumer. 
 
 
 class SavingsAccountType(Enum):  # AccountArtifactType
@@ -54,7 +63,7 @@ class UseCaseNames(Enum):
 class SavingsAccountAttributesSchema(BaseModel):
     account_type: SavingsAccountType
     account_holder_name: str
-    account_limit: int
+    account_limit: int = Field(gt=0)
     address: str
     
 
@@ -66,6 +75,7 @@ class StateSchema(TypedDict):
     usecase_conditional_status: str
     api_response_status_code: int
     response: Response
+    error_message: str
 
 class AppConfig:
   MODEL: str = "gpt-4o-mini"

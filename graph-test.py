@@ -72,13 +72,13 @@ async def get_response():
     #                     usecase_conditional_status=None,
     #                     api_response_status_code=200,
     #                     response=None)
-    state = StateSchema(attribute_state={}, 
-                        messages=[HumanMessage("Account type is savings and limit is 5000")], 
-                        previous_conversation_id="resp_0f3f010259bbed3c006948c468234481a1b8f787810a3f8a5c", 
-                        current_conversation_id=None, 
-                        usecase_conditional_status=None,
-                        api_response_status_code=200,
-                        response=None)
+    # state = StateSchema(attribute_state={}, 
+    #                     messages=[HumanMessage("Account type is savings and limit is 5000")], 
+    #                     previous_conversation_id="resp_0f3f010259bbed3c006948c468234481a1b8f787810a3f8a5c", 
+    #                     current_conversation_id=None, 
+    #                     usecase_conditional_status=None,
+    #                     api_response_status_code=200,
+    #                     response=None)
     # state = StateSchema(attribute_state={}, 
     #                     messages=[HumanMessage("Address is  Westmead, NSW")], 
     #                     previous_conversation_id="resp_0bfd4ef2c8582701006948addb2e488193a4256d2ad505ba78", 
@@ -117,11 +117,3 @@ async def get_response():
     print("Respoinse Id: ", response["current_conversation_id"])
 asyncio.run(get_response())
 
-#  attribute_state: SavingsAccountAttributesSchema
-#     messages: Annotated[list[AnyMessage], add_messages]
-#     previous_conversation_id: str
-#     current_conversation_id: str
-    
-#     usecase_conditional_status: str
-#     api_response_status_code: int
-#     response: Response

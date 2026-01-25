@@ -30,6 +30,7 @@ from fastapi import status
 from pydantic import ValidationError
 from utilities.utilities import use_case_mapping
 from pprint import pprint
+from utilities.utilities import get_runnable_config
 
 
 
@@ -65,9 +66,11 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
             self.mongo_async_client = get_async_db_client(db_uri, self.log.logger)
             self.db = AsyncDatabase(self.mongo_async_client, DB_NAME)
             self.db_collection = AsyncCollection(self.db, COLLECTION_NAME)
+            self.log.log_info(message="GraphWrapper: DB connection established")
         except Exception as e: 
             self.log.log_exception(message="Error during initialization of Database", config=None)
             raise e
+        self.log.log_info(message="GraphWrapper: Graph object compiled")
 
     def _01a_node_add_identfyusecase_sysprompt(self, s: StateSchema, config: RunnableConfig) -> StateSchema:
         """
@@ -86,16 +89,21 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         """
         # Create input list
         input_list = [{"role": role_mapping[_d.type],"content": _d.content } for _d in s["messages"]]
+        print(f"Input List: {input_list}")
         # get response
+        kwargs = {}
+        if s["previous_conversation_id"] != '': 
+            kwargs["previous_response_id"] = s["previous_conversation_id"]
         try: 
             response = self.client.responses.create(
                 model=AppConfig.MODEL, 
                 input=input_list, 
                 user=config["metadata"]["user"],
-                previous_response_id=s["previous_conversation_id"],
-                
-                tools=[_01_t_orcgraph_identify_create_savings_account_usecase, _01_t_orcgraph_identify_otherscenarios_usecase ]
+                tools=[_01_t_orcgraph_identify_create_savings_account_usecase, _01_t_orcgraph_identify_otherscenarios_usecase ], 
+                **kwargs
             )
+        #TODO - Handle api errors as in https://platform.openai.com/docs/guides/error-codes#api-errors
+        #TODO - Handle OpenAI call as part of method rather than calls from individual nodes
         except KeyError as ke: 
             pass
         return {"current_conversation_id":response.id,
@@ -106,6 +114,7 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         Conditional edge that routes graph flow to appropriate use case, or to failure scenario
         """
         #Check for refusal in message
+
         for output in  state["response"].output: 
             if output.type == "message":
                 for c in output.content: 
@@ -146,6 +155,7 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
             user=config["metadata"]["user"],
             max_output_tokens=80
         )
+        #TODO - Handle OpenAI call as part of method rather than calls from individual nodes
         llm_response_text:str = None
         for output in llm_response.output:
             for c in output.content:
@@ -176,7 +186,7 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         """
         
         
-        print("Call Id: ", )
+        # TODO Handle errors as given in https://platform.openai.com/docs/guides/error-codes#api-errors
         llm_response = self.client.responses.create(
             model=AppConfig.MODEL, 
             input=[{
@@ -276,13 +286,15 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         """
         Utility function to make calls to LLM, which reduces need for additional nodes and keeps overall graph flow simpler to comprehend
         """
-        
+        #TODO - Handle Python OpenAI errors as given in https://platform.openai.com/docs/guides/error-codes#api-errors
         return self.client.responses.create(
             previous_response_id=state["current_conversation_id"], 
             model=AppConfig.MODEL,
             input=[dict(role=role_mapping[message.type], content=message.content)], 
             **kwargs
         )
+    
+    
     
     def compile(self) -> bool:
         """
@@ -339,10 +351,25 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
             graph_builder.add_edge("_update_short_term_memory", END)
 
             self.compiledgraph= graph_builder.compile(checkpointer=checkpointer)
+            self.log.log_info(message="GraphWrapper: Graph Compiled")
         except Exception as e: 
             self.log.log_exception(message="Exception occured during creation of graph" + str(e), config=None)
             raise e
         
+    async def close(self):
+        """
+        Close DB collection during uvicorn server shutdown
+        
+        :param self: Description
+        :return: Description
+        :rtype: Any
+        """    
+        try: 
+            await self.mongo_async_client.close()
+            self.log.log_info("DB connection closed successfully")
+        except Exception as e:
+            self.log.log_exception("Exception raised during closing DB Connection")
+
     def get_state_history(self, config:RunnableConfig) -> Iterator[StateSnapshot]:
         """
         Provide checkpointer list for compiled graph
@@ -360,7 +387,7 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
                 
                 async with self.mongo_async_client.start_session(causal_consistency=True) as session:
                     response = await  self.db_collection.find_one(
-                            filter=dict(conversation_id=config["configurable"]["thread_id"], 
+                            filter=dict(conversation_id=config["metadata"]["conversation_id"], 
                                 use_case=UseCaseNames.create_savings_account.value), 
                             projection={
                                 '_id':False, 
@@ -370,7 +397,7 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
                             session=session)
                     return {"attribute_state": response}
             except Exception as e: 
-                self.log.log_exception(message="Error during retrieval of short term memory for session id" + str(e), config=config)
+                self.log.log_exception(message="Error during retrieval of short term memory for session id " + str(e), config=config)
                                   
                 return state        
     
@@ -379,13 +406,13 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
         Utility function to store session data into short term memory
         """
         try:                 
-            self.log.log_info("Update/Upsert State information to short-term memory", config )
+            self.log.log_info("Update/Upsert State information to short-term memory ", config )
             
             async  with self.mongo_async_client.start_session( causal_consistency=True) as session: 
                 if state["attribute_state"] is not None: 
                     match state["usecase_conditional_status"]:
                         case "validation_error":
-                            update_record = await self.db_collection.update_one(dict(conversation_id=config["configurable"]["thread_id"],use_case=UseCaseNames.create_savings_account.value),
+                            update_record = await self.db_collection.update_one(dict(conversation_id=config["metadata"]["conversation_id"],use_case=UseCaseNames.create_savings_account.value),
                                 {"$set": {key:state['attribute_state'][key] for key in state["attribute_state"].keys()}},
                                 upsert=True, 
                                 session=session) 
@@ -393,7 +420,7 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
                                 No of documents modified:{update_record.modified_count}"
                             self.log.log_info( update_message, config)
                         case "create_attribute_success":
-                            update_record = await self.db_collection.update_one(dict(conversation_id=config["configurable"]["thread_id"],use_case=UseCaseNames.create_savings_account.value),
+                            update_record = await self.db_collection.update_one(dict(conversation_id=config["metadata"]["conversation_id"],use_case=UseCaseNames.create_savings_account.value),
                                 {"$unset": {key:"" for key in state["attribute_state"].keys()}},
                                 upsert=True, 
                                 session=session) 
@@ -406,20 +433,13 @@ class GraphFlowWrapper[T: StateSchema](BaseGraph):
             self.log.log_exception(message="Error during updating short term memory " + str(e), config=config)
             return state
 
-    def _get_runnable_config(self,config: GraphRunMetaSchema) -> RunnableConfig: 
-        """
-        return runnable config from graph metadata schema
-        """
-
-        return RunnableConfig(configurable=dict(thread_id=config.conversation_id), 
-                                        metadata=dict(app_correlation_id=config.app_correlation_id, user=config.user),
-                                        recursion_limit=100)
+    
 
     async def invoke(self , input: StateSchema, graph_config: RunnableConfig | GraphRunMetaSchemaT )->StateSchema:
         """
             Invoke graph to get final response
         """ 
-        config=self._get_runnable_config(graph_config)
+        config=get_runnable_config(graph_config)
         try:
             response = await self.compiledgraph.ainvoke(input=input, config=config)
         finally:
